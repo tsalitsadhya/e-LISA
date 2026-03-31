@@ -1,0 +1,317 @@
+/* ===== LAYOUT ===== */
+.users-layout {
+display: flex;
+height: 100vh;
+font-family: Arial, Helvetica, sans-serif;
+background: #f5f7fb;
+}
+
+/* ===== SIDEBAR ===== */
+.sidebar {
+width: 250px;
+background: #0f4c81;
+color: white;
+display: flex;
+flex-direction: column;
+}
+
+.logo-box {
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+}
+
+.logo-img {
+  width: 100%;
+  max-width: 500px;
+  height: auto;
+  object-fit: contain;
+}
+
+.logo-title {
+font-weight: bold;
+font-size: 16px;
+}
+
+.logo-sub {
+font-size: 12px;
+opacity: .8;
+}
+
+.menu {
+flex: 1;
+padding-top: 10px;
+}
+
+.sidebar-item {
+display: flex;
+align-items: center;
+gap: 12px;
+padding: 12px 20px;
+cursor: pointer;
+font-size: 14px;
+transition: .2s;
+}
+
+.sidebar-item:hover {
+background: rgba(255,255,255,0.1);
+}
+
+.sidebar-item.active {
+background: rgba(255,255,255,0.2);
+}
+
+.logout-section {
+border-top: 1px solid rgba(255,255,255,0.2);
+}
+
+/* ===== MAIN ===== */
+.main-content {
+flex: 1;
+display: flex;
+flex-direction: column;
+margin-top: 0;   
+}
+
+/* ===== TOPBAR ===== */
+.topbar {
+background: white;
+padding: 18px 25px;
+display: flex;
+justify-content: space-between;
+border-bottom: 1px solid #e5e5e5;
+}
+
+.page-title {
+font-size: 18px;
+font-weight: bold;
+}
+
+.page-sub {
+font-size: 13px;
+color: #777;
+}
+
+.topbar-right {
+display: flex;
+gap: 20px;
+align-items: center;
+}
+
+/* ===== CONTENT ===== */
+.content-wrapper {
+padding: 5px 20px 20px 20px;
+}
+
+/* ===== STATS ===== */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 15px;
+  margin-bottom: 5px;
+  margin-top: 5;   
+}
+
+.stat-card {
+  background: white;
+  padding: 10px 12px; 
+  border-radius: 6px;
+  display: flex;
+  gap: 10px;
+  border: 1px solid #eee;
+  align-items: center; 
+}
+
+.stat-icon {
+background: #f0f4ff;
+padding: 8px;
+border-radius: 6px;
+}
+
+.stat-content {
+  line-height: 1.2;
+}
+
+.stat-title {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 2px;
+}
+
+.stat-value {
+  font-weight: bold;
+  font-size: 18px;
+  margin: 2px 0;
+}
+
+.stat-subtitle {
+  font-size: 11px;
+  color: #999;
+  margin-top: 2px;
+}
+
+/* ===== FILTER ===== */
+.filter-bar {
+background: white;
+padding: 12px;
+border: 1px solid #eee;
+border-radius: 6px;
+display: flex;
+gap: 10px;
+margin-bottom: 5px;
+}
+
+.dropdown {
+  position: relative;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  background: white;
+}
+
+.dropdown-select {
+  border: none;
+  outline: none;
+  font-size: 13px;
+  background: transparent;
+  appearance: none;
+  padding: 8px 5px;
+  width: 120px;
+  cursor: pointer;
+}
+
+.search-box {
+flex: 1;
+border: 1px solid #ddd;
+padding: 8px 12px;
+border-radius: 5px;
+display: flex;
+gap: 8px;
+}
+
+.search-box input {
+border: none;
+outline: none;
+width: 100%;
+}
+
+.search-btn {
+background: #2d6cdf;
+color: white;
+border: none;
+padding: 8px 16px;
+border-radius: 5px;
+cursor: pointer;
+}
+
+/* ===== TABLE ===== */
+.table-container {
+background: white;
+border-radius: 6px;
+border: 1px solid #eee;
+margin-top: 0;   
+}
+
+.table-header {
+padding: 12px 16px;
+font-weight: bold;
+border-bottom: 1px solid #eee;
+}
+
+.users-table {
+width: 100%;
+border-collapse: collapse;
+font-size: 13px;
+}
+
+.users-table th {
+background: #f7f7f7;
+text-align: left;
+padding: 10px;
+}
+
+.users-table td {
+padding: 10px;
+border-top: 1px solid #eee;
+}
+
+.avatar {
+font-size: 18px;
+}
+
+/* ===== ACTION BUTTONS ===== */
+.action-buttons {
+display: flex;
+gap: 8px;
+}
+
+.btn-edit {
+background: #e6f0ff;
+color: #2d6cdf;
+border: none;
+padding: 4px 10px;
+border-radius: 4px;
+cursor: pointer;
+}
+
+.btn-deactivate {
+background: #ffe6e6;
+color: #e53935;
+border: none;
+padding: 4px 10px;
+border-radius: 4px;
+cursor: pointer;
+}
+
+/* ===== TOGGLE ===== */
+.toggle {
+width: 36px;
+height: 18px;
+border-radius: 20px;
+position: relative;
+}
+
+.toggle-on {
+background: #28c76f;
+}
+
+.toggle-off {
+background: #ea5455;
+}
+
+.toggle-circle {
+width: 14px;
+height: 14px;
+background: white;
+border-radius: 50%;
+position: absolute;
+top: 2px;
+left: 2px;
+transition: .2s;
+}
+
+.toggle-on .toggle-circle {
+left: 20px;
+}
+
+/* ===== PAGINATION ===== */
+.pagination {
+display: flex;
+justify-content: space-between;
+padding: 12px;
+font-size: 12px;
+}
+
+.pagination-buttons {
+display: flex;
+gap: 5px;
+}
+
+.pagination-buttons button {
+border: 1px solid #ddd;
+background: white;
+padding: 4px 8px;
+cursor: pointer;
+}

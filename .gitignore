@@ -12,6 +12,12 @@ dist
 dist-ssr
 *.local
 
+# Secrets & binaries
+.env
+elisa-backend/.env
+elisa-backend/server.exe
+*.exe
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

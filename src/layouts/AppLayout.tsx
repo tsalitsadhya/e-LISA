@@ -1,35 +1,52 @@
 import React, { useEffect, useState } from 'react';
+import { useAuth } from '../lib/AuthContext';
+
+type Role = 'admin' | 'operator' | 'qa' | 'supervisor' | 'site_head';
+
+const ALL_ROLES: Role[] = ['admin', 'operator', 'qa', 'supervisor', 'site_head'];
 
 const NAV_ITEMS = [
   {
-    label: 'Dashboard', path: '/dashboard',
+    label: 'Dashboard',
+    path: (role: Role) => role === 'admin' ? '/dashboard-admin' : '/dashboard-user',
+    roles: ALL_ROLES,
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>,
   },
   {
-    label: 'Cleaning Management', path: '/cleaning',
+    label: 'Cleaning Management',
+    path: () => '/cleaning',
+    roles: ALL_ROLES,
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5C3.89 4 3 4.9 3 6v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/></svg>,
   },
   {
-    label: 'Room Readiness', path: '/room-readiness',
+    label: 'Room Readiness',
+    path: () => '/room-readiness',
+    roles: ALL_ROLES,
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg>,
   },
   {
-    label: 'QA Verification', path: '/qa-verification',
+    label: 'QA Verification',
+    path: () => '/qa-verification',
+    roles: ['admin', 'operator', 'qa'] as Role[],
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>,
   },
   {
-    label: 'Users', path: '/users',
+    label: 'Users',
+    path: () => '/users',
+    roles: ['admin'] as Role[],
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>,
   },
   {
-    label: 'Audit Trail', path: '/audit-trail',
+    label: 'Audit Trail',
+    path: () => '/audit-trail',
+    roles: ['admin'] as Role[],
     icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8 16h8v2H8zm0-4h8v2H8zm0-4h5v2H8z"/></svg>,
   },
-    {
-    label: 'Master Data', path: '/master-data',
-    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z"/>
-    </svg>,
+  {
+    label: 'Master Data',
+    path: () => '/master-data',
+    roles: ['admin'] as Role[],
+    icon: <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z"/></svg>,
   },
 ];
 
@@ -55,6 +72,12 @@ export const AppLayout: React.FC<Props> = ({
   activePath, pageTitle, pageSubtitle, onNavigate, onLogout, children,
 }) => {
   const now = useClock();
+  const { user } = useAuth();
+  const role = (user?.role ?? 'operator') as Role;
+
+  const visibleNav = NAV_ITEMS
+    .filter(item => item.roles.includes(role))
+    .map(item => ({ ...item, resolvedPath: item.path(role) }));
   const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
   const pad = (n: number) => String(n).padStart(2, '0');
   const dateStr = `${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
@@ -90,12 +113,14 @@ export const AppLayout: React.FC<Props> = ({
 
         {/* Nav */}
         <nav style={{ flex: 1, padding: '10px 8px', overflowY: 'auto' }}>
-          {NAV_ITEMS.map((item) => {
-            const isActive = activePath === item.path;
+          {visibleNav.map((item) => {
+            // Dashboard nav item is active for both /dashboard-admin and /dashboard-user
+            const isActive = activePath === item.resolvedPath ||
+              (item.label === 'Dashboard' && (activePath === '/dashboard-admin' || activePath === '/dashboard-user'));
             return (
               <button
-                key={item.path}
-                onClick={() => onNavigate(item.path)}
+                key={item.label}
+                onClick={() => onNavigate(item.resolvedPath)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10,
                   width: '100%', padding: '9px 12px', borderRadius: 8,

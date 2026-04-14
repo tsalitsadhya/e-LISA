@@ -1,35 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import api from '../lib/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type ReadinessStatus = 'ready' | 'warning' | 'out_of_spec';
+type ReadinessStatus = 'ready' | 'warning' | 'out_of_spec' | 'no_data';
 
-interface BmsData {
-  machineName: string;
-  temperature: number;
-  humidity: number;
-  lastUpdated: string;
+interface SensorReading {
+  value: number | null;
+  timestamp: string | null;
   status: ReadinessStatus;
 }
 
+interface BMSLine {
+  line_id: string;
+  display_name: string;
+  temperature: SensorReading;
+  humidity: SensorReading;
+  status: ReadinessStatus;
+}
+
+interface BmsData { machineName: string; temperature: number; humidity: number; lastUpdated: string; status: ReadinessStatus; }
+
 interface HistoryRow { date: string; time: string; line: string; refreshedBy: string; }
 
-// ─── Dummy data ───────────────────────────────────────────────────────────────
-const LINES = ['Line A','Line B','Line C','Line D','Line E','Line F','Line G','Line H','Line J','Line K','Line L','Line M','Line N','Line S','Line T','Line W'];
-const FLOORS = ['Floor 1','Floor 2','Floor 3','Floor 4'];
-const BMS_DATA: Record<string, BmsData> = {
-  'Line A': { machineName: 'RVS A', temperature: 26, humidity: 65, lastUpdated: 'February 20, 2026, 09:17', status: 'warning' },
-  'Line B': { machineName: 'RVS B', temperature: 20, humidity: 45, lastUpdated: 'February 20, 2026, 09:17', status: 'ready'   },
-  'Line C': { machineName: 'RVS C', temperature: 28, humidity: 70, lastUpdated: 'February 20, 2026, 09:17', status: 'out_of_spec' },
-  'Line D': { machineName: 'RVS D', temperature: 22, humidity: 40, lastUpdated: 'February 20, 2026, 09:17', status: 'ready'   },
-};
+// ─── Static / fallback ────────────────────────────────────────────────────────
 const HISTORY: HistoryRow[] = [
-  { date: '02/15/2026', time: '10:03', line: 'Line J', refreshedBy: 'Jhonathan Dermawan' },
-  { date: '02/01/2026', time: '09:54', line: 'Line C', refreshedBy: 'Jhonathan Dermawan' },
-  { date: '02/13/2026', time: '09:58', line: 'Line F', refreshedBy: 'Jhonathan Dermawan' },
-  { date: '01/28/2026', time: '08:30', line: 'Line A', refreshedBy: 'Jhonathan Dermawan' },
-  { date: '01/20/2026', time: '11:15', line: 'Line B', refreshedBy: 'Jhonathan Dermawan' },
-  { date: '01/10/2026', time: '14:22', line: 'Line D', refreshedBy: 'Jhonathan Dermawan' },
-  { date: '01/05/2026', time: '09:00', line: 'Line H', refreshedBy: 'Jhonathan Dermawan' },
+  { date: '02/15/2026', time: '10:03', line: 'Filling 13', refreshedBy: 'Jhonathan Dermawan' },
+  { date: '02/01/2026', time: '09:54', line: 'Filling 14', refreshedBy: 'Jhonathan Dermawan' },
 ];
 const ITEMS_PER_PAGE = 3;
 
@@ -96,21 +92,50 @@ function ConfirmReadyModal({ data, line, onClose, onConfirm }: { data: BmsData; 
 
 // ─── Monitoring Tab ───────────────────────────────────────────────────────────
 function MonitoringTab() {
-  const [floor, setFloor]   = useState('Floor 1');
-  const [line, setLine]     = useState('Line A');
-  const [page, setPage]     = useState(1);
-  const [modal, setModal]   = useState<'out_of_spec' | 'confirm_ready' | null>(null);
+  const [bmsLines,   setBmsLines]   = useState<BMSLine[]>([]);
+  const [selectedId, setSelectedId] = useState<string>('');
+  const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [approved, setApproved]     = useState(false);
+  const [error,      setError]      = useState('');
+  const [page,       setPage]       = useState(1);
+  const [modal,      setModal]      = useState<'out_of_spec' | 'confirm_ready' | null>(null);
+  const [approved,   setApproved]   = useState(false);
 
-  const bms    = BMS_DATA[line] ?? BMS_DATA['Line A'];
-  const status = approved ? 'ready' : bms.status;
-  const cfg    = STATUS_CFG[status];
-  const totalPages = Math.ceil(HISTORY.length / ITEMS_PER_PAGE);
+  const fetchBMS = useCallback(async (showSpinner = false) => {
+    if (showSpinner) setRefreshing(true);
+    setError('');
+    try {
+      const res = await api.get('/room/bms');
+      const lines: BMSLine[] = res.data.data ?? [];
+      setBmsLines(lines);
+      if (!selectedId && lines.length > 0) setSelectedId(lines[0].line_id);
+    } catch {
+      setError('BMS tidak tersedia. Pastikan koneksi ke ICONICS aktif.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [selectedId]);
+
+  useEffect(() => { fetchBMS(); }, []);
+
+  // Auto-refresh setiap 60 detik
+  useEffect(() => {
+    const t = setInterval(() => fetchBMS(), 60_000);
+    return () => clearInterval(t);
+  }, [fetchBMS]);
+
+  const current = bmsLines.find(l => l.line_id === selectedId) ?? null;
+  const status  = approved ? 'ready' : (current?.status ?? 'no_data');
+  const cfg     = STATUS_CFG[status === 'no_data' ? 'warning' : status as keyof typeof STATUS_CFG];
+  const totalPages   = Math.ceil(HISTORY.length / ITEMS_PER_PAGE);
   const pagedHistory = HISTORY.slice((page-1)*ITEMS_PER_PAGE, page*ITEMS_PER_PAGE);
 
-  const handleRefresh = () => { setRefreshing(true); setTimeout(() => setRefreshing(false), 1200); };
-  const handleLineChange = (l: string) => { setLine(l); setApproved(false); };
+  const fmtTs = (ts: string | null) => {
+    if (!ts) return '—';
+    const d = new Date(ts);
+    return isNaN(d.getTime()) ? ts : d.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+  };
 
   const selectStyle = (w?: number): React.CSSProperties => ({
     fontSize: 13, padding: '5px 26px 5px 10px', borderRadius: 6, border: '1px solid #d1d5db',
@@ -122,39 +147,69 @@ function MonitoringTab() {
 
   return (
     <div style={{ padding: '16px 24px', fontFamily: "'Segoe UI', Arial, sans-serif" }}>
-      {/* Breadcrumb selectors */}
+
+      {/* Error banner */}
+      {error && (
+        <div style={{ marginBottom: 14, padding: '10px 14px', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, fontSize: 13, color: '#b91c1c', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {error}
+          <button onClick={() => fetchBMS(true)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#b91c1c', textDecoration: 'underline', fontSize: 12 }}>Retry</button>
+        </div>
+      )}
+
+      {/* Line selector */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-        <select value={floor} onChange={e => setFloor(e.target.value)} style={selectStyle(110)}>{FLOORS.map(f => <option key={f}>{f}</option>)}</select>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="#9ca3af"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
-        <select value={line} onChange={e => handleLineChange(e.target.value)} style={selectStyle(120)}>{LINES.map(l => <option key={l}>{l}</option>)}</select>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Line:</span>
+        <select
+          value={selectedId}
+          onChange={e => { setSelectedId(e.target.value); setApproved(false); }}
+          style={selectStyle(180)}
+          disabled={loading || bmsLines.length === 0}>
+          {loading
+            ? <option>Memuat...</option>
+            : bmsLines.map(l => <option key={l.line_id} value={l.line_id}>{l.display_name}</option>)}
+        </select>
+        <span style={{ fontSize: 11, color: '#94a3b8' }}>Lantai 1 — ICONICS HH</span>
       </div>
 
       {/* BMS Card */}
       <div style={{ background: '#fff', borderRadius: 10, border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: '#1a2744' }}>Temperature & Humidity Data (BMS)</span>
-          <button onClick={handleRefresh} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 12, borderRadius: 6, border: 'none', background: '#1a7fd4', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
+          <button onClick={() => fetchBMS(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', fontSize: 12, borderRadius: 6, border: 'none', background: '#1a7fd4', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }}><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
             {refreshing ? 'Refreshing...' : 'Refresh Data BMS'}
           </button>
         </div>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '2rem', color: '#9ca3af', fontSize: 13 }}>Menghubungkan ke ICONICS Hyper Historian…</div>
+        ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           {/* Sensor data */}
           <div style={{ background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb', padding: '16px 20px' }}>
-            <div style={{ fontWeight: 600, fontSize: 13, color: '#374151', marginBottom: 16 }}>{bms.machineName} (Source: BMS)</div>
+            <div style={{ fontWeight: 600, fontSize: 13, color: '#374151', marginBottom: 16 }}>
+              {current?.display_name ?? '—'} <span style={{ fontWeight: 400, color: '#9ca3af' }}>(Source: BMS)</span>
+            </div>
             {[
-              { icon: '🌡', label: 'Temperature:', value: `${bms.temperature}°C`, iconBg: '#fee2e2' },
-              { icon: '💧', label: 'Humidity:',    value: `${bms.humidity}%`,     iconBg: '#dbeafe' },
+              { icon: '🌡', label: 'Temperature:', value: current?.temperature.value != null ? `${current.temperature.value.toFixed(1)}°C` : '—', sub: current?.temperature.status, ts: current?.temperature.timestamp, iconBg: '#fee2e2' },
+              { icon: '💧', label: 'Humidity:',    value: current?.humidity.value    != null ? `${current.humidity.value.toFixed(1)}%`   : '—', sub: current?.humidity.status,    ts: current?.humidity.timestamp,    iconBg: '#dbeafe' },
             ].map(item => (
               <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: item.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14 }}>{item.icon}</div>
-                <div>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: item.iconBg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>{item.icon}</div>
+                <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 11, color: '#9ca3af' }}>{item.label}</div>
                   <div style={{ fontSize: 22, fontWeight: 700, color: '#1a2744' }}>{item.value}</div>
                 </div>
+                {item.sub && item.sub !== 'no_data' && (
+                  <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: item.sub === 'ready' ? '#dcfce7' : item.sub === 'warning' ? '#fef9c3' : '#fee2e2', color: item.sub === 'ready' ? '#15803d' : item.sub === 'warning' ? '#854d0e' : '#b91c1c' }}>
+                    {item.sub === 'ready' ? 'OK' : item.sub === 'warning' ? 'WARNING' : 'OUT OF SPEC'}
+                  </span>
+                )}
               </div>
             ))}
-            <div style={{ fontSize: 11, color: '#9ca3af' }}>Last Updated: {bms.lastUpdated}</div>
+            <div style={{ fontSize: 11, color: '#9ca3af', borderTop: '1px solid #f1f5f9', paddingTop: 8, marginTop: 4 }}>
+              Last Updated: {fmtTs(current?.temperature.timestamp ?? null)}
+            </div>
           </div>
           {/* Status panel */}
           <div style={{ background: cfg.bg, borderRadius: 8, border: `1px solid ${cfg.borderColor}`, padding: '16px 20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
@@ -167,13 +222,13 @@ function MonitoringTab() {
               </div>
               <div>
                 <div style={{ fontSize: 20, fontWeight: 800, color: cfg.color }}>{cfg.label}</div>
-                <div style={{ fontSize: 12, color: '#6b7280' }}>Out of Specification</div>
+                <div style={{ fontSize: 12, color: '#6b7280' }}>Room Condition Status</div>
               </div>
             </div>
             <div style={{ marginBottom: 14 }}>
-              {[{ dot: '#22c55e', label: 'Within Spec' }, { dot: '#f59e0b', label: 'Warning' }, { dot: '#ef4444', label: 'Out of Spec' }].map(l => (
+              {[{ dot: '#22c55e', label: 'Within Spec (≤25°C, ≤65% RH)' }, { dot: '#f59e0b', label: 'Warning (≤27°C, ≤70% RH)' }, { dot: '#ef4444', label: 'Out of Spec — calling maintenance' }].map(l => (
                 <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: l.dot, display: 'inline-block' }} />
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: l.dot, display: 'inline-block', flexShrink: 0 }} />
                   <span style={{ fontSize: 11, color: '#6b7280' }}>{l.label}</span>
                 </div>
               ))}
@@ -185,6 +240,7 @@ function MonitoringTab() {
             </button>
           </div>
         </div>
+        )}
       </div>
 
       {/* History */}
@@ -215,8 +271,12 @@ function MonitoringTab() {
         </div>
       </div>
 
-      {modal === 'out_of_spec' && <OutOfSpecModal data={bms} line={line} onClose={() => setModal(null)} />}
-      {modal === 'confirm_ready' && <ConfirmReadyModal data={bms} line={line} onClose={() => setModal(null)} onConfirm={() => { setApproved(true); setModal(null); }} />}
+      {modal === 'out_of_spec' && current && <OutOfSpecModal
+        data={{ machineName: current.display_name, temperature: current.temperature.value ?? 0, humidity: current.humidity.value ?? 0, lastUpdated: fmtTs(current.temperature.timestamp), status: 'out_of_spec' }}
+        line={current.display_name} onClose={() => setModal(null)} />}
+      {modal === 'confirm_ready' && current && <ConfirmReadyModal
+        data={{ machineName: current.display_name, temperature: current.temperature.value ?? 0, humidity: current.humidity.value ?? 0, lastUpdated: fmtTs(current.temperature.timestamp), status: 'ready' }}
+        line={current.display_name} onClose={() => setModal(null)} onConfirm={() => { setApproved(true); setModal(null); }} />}
       <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
@@ -276,13 +336,15 @@ function ReviewDataTab() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <label style={labelS}>Site {req}</label>
             <select value={site} onChange={e => setSite(e.target.value)} style={selectS}>
-              <option>Cikarang</option><option>Bekasi</option>
+              <option>Deltamas</option><option>Pulogadung</option>
             </select>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <label style={labelS}>Area {req}</label>
             <select value={area} onChange={e => setArea(e.target.value)} style={selectS}>
-              <option>Cikarang</option><option>Bekasi</option>
+              <option>Produksi</option><option>Warehouse</option>
+              <option>QC</option><option>PD</option>
+              <option>Andev</option><option>Engineering</option>
             </select>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>

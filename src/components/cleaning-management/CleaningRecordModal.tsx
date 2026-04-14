@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
+import api from '../../lib/api';
 import {
   type LantaiKey, MESIN_BY_LANTAI, getMesinById,
   PRODUK_OPTIONS, CATEGORY_CLEANING,
@@ -48,10 +49,19 @@ interface FormState {
   catatanUmum: string;
 }
 
+interface ApiMachine {
+  id: string;
+  machine_name: string;
+  machine_type: string;
+  floor: number;
+}
+
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   defaultLantai?: LantaiKey;
+  machineId?: string;
+  machineName?: string;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -148,7 +158,7 @@ const StepBar: React.FC<{ step: number }> = ({ step }) => {
 
 // ─── Step 1A — Lantai 1 ──────────────────────────────────────────────────────
 
-const Step1Lantai1: React.FC<{ form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>> }> = ({ form, setForm }) => {
+const Step1Lantai1: React.FC<{ form: FormState; setForm: React.Dispatch<React.SetStateAction<FormState>>; apiMachines: ApiMachine[]; lockedMachineName?: string }> = ({ form, setForm, apiMachines, lockedMachineName }) => {
   const set = (k: keyof FormState, v: string) => setForm(f => ({ ...f, [k]: v }));
   return (
     <div>
@@ -161,10 +171,14 @@ const Step1Lantai1: React.FC<{ form: FormState; setForm: React.Dispatch<React.Se
       <div style={grid2}>
         <div style={fieldS}>
           <label style={labelS}>Mesin {req}</label>
-          <select value={form.mesinId} onChange={e => set('mesinId', e.target.value)} style={selectS}>
-            <option value="">Pilih mesin...</option>
-            {MESIN_BY_LANTAI.lantai1.map(m => <option key={m.id} value={m.id}>{m.nama}</option>)}
-          </select>
+          {lockedMachineName ? (
+            <input value={lockedMachineName} readOnly style={{ ...inputS, background: '#f0f9ff', color: '#1a2744', fontWeight: 600, border: '1px solid #bae6fd' }} />
+          ) : (
+            <select value={form.mesinId} onChange={e => set('mesinId', e.target.value)} style={selectS}>
+              <option value="">Pilih mesin...</option>
+              {apiMachines.filter(m => m.floor === 1).map(m => <option key={m.id} value={m.id}>{m.machine_name}</option>)}
+            </select>
+          )}
         </div>
         <div style={fieldS}>
           <label style={labelS}>Rule Type {req}</label>
@@ -187,11 +201,11 @@ const Step1Lantai1: React.FC<{ form: FormState; setForm: React.Dispatch<React.Se
       <div style={grid2}>
         <div style={fieldS}>
           <label style={labelS}>Waktu Mulai {req}</label>
-          <input type="time" value={form.waktuMulai} onChange={e => { set('waktuMulai', e.target.value); set('durasi', calcDurasi(e.target.value, form.waktuSelesai)); }} style={inputS} />
+          <input type="text" placeholder="HH:MM" maxLength={5} value={form.waktuMulai} onChange={e => { set('waktuMulai', e.target.value); set('durasi', calcDurasi(e.target.value, form.waktuSelesai)); }} style={inputS} />
         </div>
         <div style={fieldS}>
           <label style={labelS}>Waktu Selesai {req}</label>
-          <input type="time" value={form.waktuSelesai} onChange={e => { set('waktuSelesai', e.target.value); set('durasi', calcDurasi(form.waktuMulai, e.target.value)); }} style={inputS} />
+          <input type="text" placeholder="HH:MM" maxLength={5} value={form.waktuSelesai} onChange={e => { set('waktuSelesai', e.target.value); set('durasi', calcDurasi(form.waktuMulai, e.target.value)); }} style={inputS} />
         </div>
       </div>
       <div style={{ ...fieldS, width: '50%' }}>
@@ -243,11 +257,11 @@ const MesinCard: React.FC<{
       <div style={grid2}>
         <div style={fieldS}>
           <label style={labelS}>Waktu Mulai {req}</label>
-          <input type="time" value={entry.waktuMulai} onChange={e => onUpdate(entry.uid, { waktuMulai: e.target.value, durasi: calcDurasi(e.target.value, entry.waktuSelesai) })} style={inputS} />
+          <input type="text" placeholder="HH:MM" maxLength={5} value={entry.waktuMulai} onChange={e => onUpdate(entry.uid, { waktuMulai: e.target.value, durasi: calcDurasi(e.target.value, entry.waktuSelesai) })} style={inputS} />
         </div>
         <div style={fieldS}>
           <label style={labelS}>Waktu Selesai {req}</label>
-          <input type="time" value={entry.waktuSelesai} onChange={e => onUpdate(entry.uid, { waktuSelesai: e.target.value, durasi: calcDurasi(entry.waktuMulai, e.target.value) })} style={inputS} />
+          <input type="text" placeholder="HH:MM" maxLength={5} value={entry.waktuSelesai} onChange={e => onUpdate(entry.uid, { waktuSelesai: e.target.value, durasi: calcDurasi(entry.waktuMulai, e.target.value) })} style={inputS} />
         </div>
       </div>
       <div style={{ ...fieldS, width: '50%' }}>
@@ -386,11 +400,11 @@ const StageAccordion: React.FC<{
           <div style={{ display: 'flex', gap: 10, marginBottom: 10, alignItems: 'flex-end' }}>
             <div style={{ flex: 1 }}>
               <label style={labelS}>Jam mulai {req}</label>
-              <input type="time" value={data.jamMulai} onChange={e => setJam('jamMulai', e.target.value)} style={{ ...inputS, fontSize: 12 }} />
+              <input type="text" placeholder="HH:MM" maxLength={5} value={data.jamMulai} onChange={e => setJam('jamMulai', e.target.value)} style={{ ...inputS, fontSize: 12 }} />
             </div>
             <div style={{ flex: 1 }}>
               <label style={labelS}>Jam selesai {req}</label>
-              <input type="time" value={data.jamSelesai} onChange={e => setJam('jamSelesai', e.target.value)} style={{ ...inputS, fontSize: 12 }} />
+              <input type="text" placeholder="HH:MM" maxLength={5} value={data.jamSelesai} onChange={e => setJam('jamSelesai', e.target.value)} style={{ ...inputS, fontSize: 12 }} />
             </div>
             <div style={{ flex: 0.6 }}>
               <label style={labelS}>Durasi</label>
@@ -566,32 +580,120 @@ const LANTAI_OPTS: { value: LantaiKey; label: string }[] = [
   { value: 'lantai3', label: 'Lantai 3' }, { value: 'lantai4', label: 'Lantai 4' },
 ];
 
-export const CleaningRecordModal: React.FC<Props> = ({ isOpen, onClose, defaultLantai = 'lantai1' }) => {
+export const CleaningRecordModal: React.FC<Props> = ({ isOpen, onClose, defaultLantai = 'lantai1', machineId, machineName }) => {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormState>(INIT_FORM(defaultLantai));
   const [checklist, setChecklist] = useState<ChecklistState>(() => initChecklist(''));
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [apiMachines, setApiMachines] = useState<ApiMachine[]>([]);
+  // Track which machine the checklist was initialised for — only reset on machine change
+  const [checklistMid, setChecklistMid] = useState('');
 
   const isLt1 = form.lantai === 'lantai1';
 
+  // Pre-fill machineId from prop (when opened from a specific row)
+  useEffect(() => {
+    if (isOpen && machineId) {
+      setForm(f => ({ ...f, mesinId: machineId }));
+    }
+  }, [isOpen, machineId]);
+
+  // Fetch machines from backend
+  useEffect(() => {
+    api.get('/machines').then(res => {
+      setApiMachines(res.data.data ?? []);
+    }).catch(() => {});
+  }, []);
+
   const resetAndClose = () => {
     setStep(1); setForm(INIT_FORM(defaultLantai));
-    setChecklist(initChecklist('')); setSubmitted(false);
+    setChecklist(initChecklist('')); setChecklistMid('');
+    setSubmitted(false); setSubmitting(false); setSubmitError('');
     onClose();
   };
 
   const handleLantaiChange = (l: LantaiKey) => {
     setForm(INIT_FORM(l));
     setChecklist(initChecklist(''));
+    setChecklistMid('');
     setStep(1);
   };
 
   const goNext = () => {
     if (step === 1) {
       const mid = isLt1 ? form.mesinId : form.mesinList[0]?.mesinId ?? '';
-      setChecklist(initChecklist(mid));
+      // Only reset checklist when the selected machine actually changes
+      if (mid !== checklistMid) {
+        setChecklist(initChecklist(mid));
+        setChecklistMid(mid);
+      }
     }
     setStep(s => Math.min(s + 1, 3));
+  };
+
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    setSubmitError('');
+    try {
+      const activeMachineId = machineId ?? form.mesinId;
+      if (!activeMachineId) {
+        setSubmitError('Pilih mesin terlebih dahulu.');
+        setSubmitting(false);
+        return;
+      }
+
+      // Build checklist items from checklist state
+      const items: object[] = [];
+      (Object.entries(checklist) as [StageName, StageData][]).forEach(([stageName, stageData]) => {
+        const stageId = parseInt(stageName.split('.')[0], 10);
+        Object.entries(stageData.parts).forEach(([partName, part]) => {
+          const durasiMulai = stageData.jamMulai && stageData.jamSelesai
+            ? (() => {
+                const [mh, mm] = stageData.jamMulai.split(':').map(Number);
+                const [sh, sm] = stageData.jamSelesai.split(':').map(Number);
+                let diff = (sh * 60 + sm) - (mh * 60 + mm);
+                if (diff < 0) diff += 1440;
+                return diff;
+              })()
+            : 0;
+          items.push({
+            stage_id:       stageId,
+            part_id:        '',
+            part_name:      partName,
+            jam_mulai:      stageData.jamMulai || '',
+            jam_selesai:    stageData.jamSelesai || '',
+            durasi_menit:   durasiMulai,
+            is_checked:     part.checked,
+            keterangan:     part.keterangan || '',
+            notes:          '',
+            signature_name: part.signature || '',
+          });
+        });
+      });
+
+      const durasiMenit = form.durasi ? parseInt(form.durasi, 10) : 0;
+
+      await api.post('/cleaning/records', {
+        machine_id:         activeMachineId,
+        cleaning_date:      form.tanggal,
+        cleaning_type:      form.categoryGlobal || 'Minor',
+        produk_sebelumnya:  form.produkSebelumnya,
+        produk_sesudahnya:  form.produkSesudahnya,
+        waktu_mulai:        form.waktuMulai || '',
+        waktu_selesai:      form.waktuSelesai || '',
+        durasi_menit:       isNaN(durasiMenit) ? 0 : durasiMenit,
+        catatan:            form.catatanUmum,
+        items,
+      });
+
+      setSubmitted(true);
+    } catch (err: any) {
+      setSubmitError(err?.response?.data?.message ?? 'Gagal submit. Coba lagi.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -626,7 +728,7 @@ export const CleaningRecordModal: React.FC<Props> = ({ isOpen, onClose, defaultL
               <button onClick={resetAndClose} style={{ padding: '7px 22px', fontSize: 13, borderRadius: 6, border: 'none', background: '#1a7fd4', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}>Tutup</button>
             </div>
           ) : step === 1 ? (
-            isLt1 ? <Step1Lantai1 form={form} setForm={setForm} /> : <Step1Lantai234 form={form} setForm={setForm} />
+            isLt1 ? <Step1Lantai1 form={form} setForm={setForm} apiMachines={apiMachines} lockedMachineName={machineName} /> : <Step1Lantai234 form={form} setForm={setForm} />
           ) : step === 2 ? (
             <Step2 form={form} checklist={checklist} setChecklist={setChecklist} />
           ) : (
@@ -635,7 +737,13 @@ export const CleaningRecordModal: React.FC<Props> = ({ isOpen, onClose, defaultL
         </div>
 
         {!submitted && (
-          <div style={{ padding: '10px 18px', borderTop: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ padding: '10px 18px', borderTop: '1px solid #e5e7eb' }}>
+            {submitError && (
+              <div style={{ marginBottom: 8, padding: '6px 10px', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 6, fontSize: 11, color: '#b91c1c' }}>
+                {submitError}
+              </div>
+            )}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <span style={{ fontSize: 11, color: '#9ca3af' }}>Step {step} dari 3</span>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => step > 1 ? setStep(s => s - 1) : resetAndClose()} style={{ padding: '7px 15px', fontSize: 12, borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', color: '#374151', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}>
@@ -645,12 +753,13 @@ export const CleaningRecordModal: React.FC<Props> = ({ isOpen, onClose, defaultL
                 ? <button onClick={goNext} style={{ padding: '7px 16px', fontSize: 12, borderRadius: 6, border: 'none', background: '#1a7fd4', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}>
                     Lanjut ke {step === 1 ? 'Checklist' : 'Review'} →
                   </button>
-                : <button onClick={() => setSubmitted(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', fontSize: 12, borderRadius: 6, border: 'none', background: '#1a7fd4', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 700 }}>
+                : <button onClick={handleSubmit} disabled={submitting} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', fontSize: 12, borderRadius: 6, border: 'none', background: submitting ? '#93c5fd' : '#1a7fd4', color: '#fff', cursor: submitting ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontWeight: 700 }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-                    Submit & Notify to QA
+                    {submitting ? 'Menyimpan...' : 'Submit & Notify to QA'}
                   </button>
               }
             </div>
+          </div>
           </div>
         )}
       </div>

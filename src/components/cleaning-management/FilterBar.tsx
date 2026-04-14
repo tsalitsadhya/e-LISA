@@ -137,28 +137,31 @@ export const FilterBar: React.FC<Props> = ({ filters, onChange, onAddRecord }) =
         <option value="inprogress">Cleaning In Progress</option>
       </SelectField>
 
-      {/* Date range — placeholder for now */}
-      <div style={{ position: 'relative' }}>
-        <span style={{
-          position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)',
-          pointerEvents: 'none', display: 'flex', alignItems: 'center',
-        }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="#9ca3af">
-            <path d="M20 3h-1V1h-2v2H7V1H5v2H4c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 18H4V8h16v13z" />
-          </svg>
-        </span>
+      {/* Date range — Next Cleaning */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ fontSize: 11, color: '#9ca3af', whiteSpace: 'nowrap' }}>Next cleaning:</span>
         <input
-          type="text"
-          placeholder="Date range"
-          readOnly
-          style={{
-            ...inputBase,
-            width: 130,
-            paddingLeft: 28,
-            cursor: 'pointer',
-            color: '#9ca3af',
-          }}
+          type="date"
+          value={filters.dateFrom}
+          onChange={e => onChange({ ...filters, dateFrom: e.target.value })}
+          title="Dari tanggal"
+          style={{ ...inputBase, width: 130, cursor: 'pointer' }}
         />
+        <span style={{ fontSize: 11, color: '#9ca3af' }}>–</span>
+        <input
+          type="date"
+          value={filters.dateTo}
+          onChange={e => onChange({ ...filters, dateTo: e.target.value })}
+          title="Sampai tanggal"
+          style={{ ...inputBase, width: 130, cursor: 'pointer' }}
+        />
+        {(filters.dateFrom || filters.dateTo) && (
+          <button
+            onClick={() => onChange({ ...filters, dateFrom: '', dateTo: '' })}
+            title="Reset date filter"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 14, padding: '0 2px', lineHeight: 1 }}
+          >✕</button>
+        )}
       </div>
 
       {/* Add button */}

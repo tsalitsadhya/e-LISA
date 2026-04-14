@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CleaningFilters, CleaningRecord, CleaningSummary } from '../types/cleaning';
-import { CLEANING_DUMMY_DATA } from './cleaningDummyData';
+import api from '../lib/api';
 
 export function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -15,38 +15,86 @@ export function daysUntil(iso: string | null): number | null {
   return Math.round(diff / (1000 * 60 * 60 * 24));
 }
 
+// Map backend CleaningSchedule → frontend CleaningRecord
+function mapSchedule(s: any): CleaningRecord {
+  const statusMap: Record<string, CleaningRecord['status']> = {
+    safe:        'safe',
+    due:         'due',
+    overdue:     'overdue',
+    waiting_qa:  'qa',
+    inprogress:  'inprogress',
+  };
+
+  return {
+    id:              s.id,
+    machineId:       s.machine_id,
+    machineName:     s.machine_name,
+    machineType:     s.machine_type,
+    machineCode:     s.machine_code ?? '',
+    subLabel:        s.line_name ?? s.machine_code ?? '',
+    location:        `Lantai ${s.floor}` as CleaningRecord['location'],
+    floor:           s.floor,
+    lastCleaned:     s.last_cleaned   ?? null,
+    nextCleaning:    s.next_cleaning  ?? null,
+    lastRecordId:    s.last_record_id ?? null,
+    checklistStatus: s.checklist_status === 'approved' ? 'approved'
+                   : s.checklist_status === 'pending'  ? 'pending'
+                   : null,
+    status:          statusMap[s.status] ?? 'safe',
+    hasRecord:       !!s.last_record_id,
+    reportApproved:  s.checklist_status === 'approved',
+  };
+}
+
 export function useCleaning() {
-  const [filters, setFilters] = useState<CleaningFilters>({
-    search: '',
-    machineType: '',
-    location: '',
-    status: '',
+  const [rawData,  setRawData]  = useState<CleaningRecord[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState('');
+  const [filters,  setFilters]  = useState<CleaningFilters>({
+    search: '', machineType: '', location: '', status: '', dateFrom: '', dateTo: '',
   });
 
-  // NOTE: swap CLEANING_DUMMY_DATA with API call when backend is ready
-  const allData: CleaningRecord[] = CLEANING_DUMMY_DATA;
+  const fetchSchedule = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await api.get('/cleaning/schedule');
+      const schedules: CleaningRecord[] = (res.data.data ?? []).map(mapSchedule);
+      setRawData(schedules);
+    } catch {
+      setError('Gagal memuat jadwal cleaning.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const filtered = useMemo(() => {
-    return allData.filter((r) => {
-      if (
-        filters.search &&
-        !r.machineName.toLowerCase().includes(filters.search.toLowerCase()) &&
-        !r.subLabel.toLowerCase().includes(filters.search.toLowerCase())
-      ) return false;
-      if (filters.machineType && r.machineType !== filters.machineType) return false;
-      if (filters.location && r.location !== filters.location) return false;
-      if (filters.status && r.status !== filters.status) return false;
-      return true;
-    });
-  }, [allData, filters]);
+  useEffect(() => { fetchSchedule(); }, [fetchSchedule]);
+
+  const filtered = useMemo(() => rawData.filter((r) => {
+    if (
+      filters.search &&
+      !r.machineName.toLowerCase().includes(filters.search.toLowerCase()) &&
+      !r.subLabel.toLowerCase().includes(filters.search.toLowerCase())
+    ) return false;
+    if (filters.machineType && r.machineType !== filters.machineType) return false;
+    if (filters.location   && r.location    !== filters.location)    return false;
+    if (filters.status     && r.status      !== filters.status)      return false;
+    if (filters.dateFrom && r.nextCleaning) {
+      if (new Date(r.nextCleaning) < new Date(filters.dateFrom)) return false;
+    }
+    if (filters.dateTo && r.nextCleaning) {
+      if (new Date(r.nextCleaning) > new Date(filters.dateTo)) return false;
+    }
+    return true;
+  }), [rawData, filters]);
 
   const summary: CleaningSummary = useMemo(() => ({
-    total: allData.length,
-    safe: allData.filter((r) => r.status === 'safe').length,
-    due: allData.filter((r) => r.status === 'due').length,
-    overdue: allData.filter((r) => r.status === 'overdue').length,
-    waitingQA: allData.filter((r) => r.status === 'qa').length,
-  }), [allData]);
+    total:     rawData.length,
+    safe:      rawData.filter(r => r.status === 'safe').length,
+    due:       rawData.filter(r => r.status === 'due').length,
+    overdue:   rawData.filter(r => r.status === 'overdue').length,
+    waitingQA: rawData.filter(r => r.status === 'qa').length,
+  }), [rawData]);
 
-  return { filtered, summary, filters, setFilters };
+  return { filtered, summary, filters, setFilters, loading, error, refetch: fetchSchedule };
 }

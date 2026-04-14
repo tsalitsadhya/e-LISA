@@ -8,12 +8,16 @@ export type Floor = 'Lantai 1' | 'Lantai 2' | 'Lantai 3' | 'Lantai 4';
 
 export interface CleaningRecord {
   id: string;
+  machineId: string;
   machineName: string;
   machineType: MachineType;
+  machineCode: string;
   subLabel: string;
   location: Floor;
+  floor: number;
   lastCleaned: string | null;
   nextCleaning: string | null;
+  lastRecordId: string | null;
   checklistStatus: ChecklistStatus;
   status: CleaningStatus;
   hasRecord: boolean;
@@ -33,4 +37,6 @@ export interface CleaningFilters {
   machineType: MachineType | '';
   location: Floor | '';
   status: CleaningStatus | '';
+  dateFrom: string;
+  dateTo: string;
 }

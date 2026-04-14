@@ -8,6 +8,8 @@ import { HistoryTab } from './HistoryTab';
 import { ChecklistPembersihanTab } from './ChecklistPembersihanTab';
 import { Pagination } from './Pagination';
 import { CleaningRecordModal } from './CleaningRecordModal';
+import { formatDate } from '../../hooks/useCleaning';
+import { StatusBadge } from './StatusBadge';
 import type { LantaiKey } from './machineData';
 
 type Tab = 'schedule' | 'history' | 'checklist';
@@ -29,11 +31,16 @@ function locationToLantai(location: string): LantaiKey {
 export const CleaningManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('schedule');
   const [page, setPage] = useState(1);
-  const { filtered, summary, filters, setFilters } = useCleaning();
+  const { filtered, summary, filters, setFilters, loading, error, refetch } = useCleaning();
 
-  // Modal state
+  // Checklist modal state
   const [modalOpen, setModalOpen] = useState(false);
   const [modalLantai, setModalLantai] = useState<LantaiKey>('lantai1');
+  const [modalMachineId, setModalMachineId] = useState<string | undefined>(undefined);
+  const [modalMachineName, setModalMachineName] = useState<string | undefined>(undefined);
+
+  // View detail modal state
+  const [viewRow, setViewRow] = useState<CleaningRecord | null>(null);
 
   const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
@@ -41,13 +48,17 @@ export const CleaningManagement: React.FC = () => {
 
   const handleAddRecord = () => {
     setModalLantai('lantai1');
+    setModalMachineId(undefined);
+    setModalMachineName(undefined);
     setModalOpen(true);
   };
 
-  const handleView = (row: CleaningRecord) => console.log('view', row.id);
+  const handleView = (row: CleaningRecord) => setViewRow(row);
 
   const handleChecklist = (row: CleaningRecord) => {
     setModalLantai(locationToLantai(row.location));
+    setModalMachineId(row.machineId);
+    setModalMachineName(row.machineName);
     setModalOpen(true);
   };
 
@@ -80,30 +91,100 @@ export const CleaningManagement: React.FC = () => {
         <>
           <SummaryCards summary={summary} />
           <FilterBar filters={filters} onChange={handleFiltersChange} onAddRecord={handleAddRecord} />
-          <CleaningTable
-            data={paginated}
-            totalCount={summary.total}
-            onView={handleView}
-            onChecklist={handleChecklist}
-            onReport={handleReport}
-          />
-          <Pagination
-            currentPage={page}
-            totalItems={filtered.length}
-            itemsPerPage={ITEMS_PER_PAGE}
-            onPageChange={setPage}
-          />
+
+          {error && (
+            <div style={{ margin: '12px 0', padding: '10px 14px', background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, fontSize: 12, color: '#b91c1c', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              {error}
+              <button onClick={refetch} style={{ fontSize: 11, border: 'none', background: 'none', cursor: 'pointer', color: '#b91c1c', textDecoration: 'underline' }}>Retry</button>
+            </div>
+          )}
+
+          {loading ? (
+            <div style={{ padding: '3rem', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+              Memuat data jadwal cleaning...
+            </div>
+          ) : (
+            <>
+              <CleaningTable
+                data={paginated}
+                totalCount={summary.total}
+                onView={handleView}
+                onChecklist={handleChecklist}
+                onReport={handleReport}
+              />
+              <Pagination
+                currentPage={page}
+                totalItems={filtered.length}
+                itemsPerPage={ITEMS_PER_PAGE}
+                onPageChange={setPage}
+              />
+            </>
+          )}
         </>
       )}
 
       {activeTab === 'history' && <HistoryTab />}
       {activeTab === 'checklist' && <ChecklistPembersihanTab />}
 
-      {/* Modal */}
+      {/* View Detail Modal */}
+      {viewRow && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: '#fff', borderRadius: 10, width: '100%', maxWidth: 480, boxShadow: '0 20px 50px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
+            {/* Header */}
+            <div style={{ background: '#034586', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ color: '#fff', fontWeight: 700, fontSize: 14 }}>{viewRow.machineName}</div>
+                <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 2 }}>{viewRow.machineCode} · {viewRow.location}</div>
+              </div>
+              <button onClick={() => setViewRow(null)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 20, cursor: 'pointer', lineHeight: 1, padding: 4 }}>✕</button>
+            </div>
+            {/* Body */}
+            <div style={{ padding: '16px 18px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px 20px' }}>
+                {[
+                  { label: 'Machine Type',     value: viewRow.machineType },
+                  { label: 'Line / Sub-label', value: viewRow.subLabel || '—' },
+                  { label: 'Last Cleaned',     value: formatDate(viewRow.lastCleaned) },
+                  { label: 'Next Cleaning',    value: formatDate(viewRow.nextCleaning) },
+                  { label: 'Checklist',        value: viewRow.checklistStatus ?? 'Belum ada' },
+                ].map(({ label, value }) => (
+                  <div key={label}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>{label}</div>
+                    <div style={{ fontSize: 13, color: '#1a2744', fontWeight: 500 }}>{value}</div>
+                  </div>
+                ))}
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 600, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 }}>Status</div>
+                  <StatusBadge status={viewRow.status} />
+                </div>
+              </div>
+            </div>
+            {/* Footer actions */}
+            <div style={{ padding: '10px 18px 16px', display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid #f3f4f6' }}>
+              <button
+                onClick={() => setViewRow(null)}
+                style={{ padding: '7px 18px', fontSize: 12, borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', color: '#374151', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 500 }}
+              >
+                Tutup
+              </button>
+              <button
+                onClick={() => { setViewRow(null); handleChecklist(viewRow); }}
+                style={{ padding: '7px 18px', fontSize: 12, borderRadius: 6, border: 'none', background: '#1a7fd4', color: '#fff', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600 }}
+              >
+                ✓ Isi Checklist
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Checklist Modal */}
       <CleaningRecordModal
         isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => { setModalOpen(false); refetch(); }}
         defaultLantai={modalLantai}
+        machineId={modalMachineId}
+        machineName={modalMachineName}
       />
     </div>
   );
